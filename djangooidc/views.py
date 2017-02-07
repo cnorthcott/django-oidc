@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 CLIENTS = OIDCClients(settings)
 
-
 # Step 1: provider choice (form). Also - Step 2: redirect to OP. (Step 3 is OP business.)
 class DynamicProvider(forms.Form):
     hint = forms.CharField(required=True, label='OpenID Connect full login', max_length=250)
@@ -53,21 +52,26 @@ def openid(request, op_name=None):
     if request.method == 'POST' and dyn:
         form = DynamicProvider(request.POST)
         if form.is_valid():
-            try:
-                client = CLIENTS.dynamic_client(form.cleaned_data["hint"])
-                request.session["op"] = client.provider_info["issuer"]
-            except Exception as e:
-                logger.exception("could not create OOID client")
-                return render(request, "djangooidc/error.html", {"error": e})
+            # Bypass error handling to allow default Django exception analysis
+            client = CLIENTS.dynamic_client(form.cleaned_data["hint"])
+            request.session["op"] = client.provider_info["issuer"]
+            # try:
+            #     client = CLIENTS.dynamic_client(form.cleaned_data["hint"])
+            #     request.session["op"] = client.provider_info["issuer"]
+            # except Exception as e:
+            #     logger.exception("could not create OOID client")
+            #     return render(request, "djangooidc/error.html", {"error": e})
     else:
         form = DynamicProvider()
 
     # If we were able to determine the OP client, just redirect to it with an authentication request
     if client:
-        try:
-            return client.create_authn_request(request.session)
-        except Exception as e:
-            return render(request, "djangooidc/error.html", {"error": e})
+        # Bypass error handling to allow default Django exception analysis
+        return client.create_authn_request(request.session)
+        # try:
+        #     return client.create_authn_request(request.session)
+        # except Exception as e:
+        #     return render(request, "djangooidc/error.html", {"error": e})
 
     return render(request,
                   template_name,
@@ -81,18 +85,28 @@ def authz_cb(request):
     client = CLIENTS[request.session["op"]]
     query = None
 
-    try:
-        query = parse_qs(request.META['QUERY_STRING'])
-        userinfo = client.callback(query, request.session)
-        request.session["userinfo"] = userinfo
-        user = authenticate(**userinfo)
-        if user:
-            login(request, user)
-            return redirect(request.session["next"])
-        else:
-            raise Exception('this login is not valid in this application')
-    except OIDCError as e:
-        return render(request, "djangooidc/error.html", {"error": e, "callback": query})
+    query = parse_qs(request.META['QUERY_STRING'])
+    userinfo = client.callback(query, request.session)
+    request.session["userinfo"] = userinfo
+    user = authenticate(**userinfo)
+    if user:
+        login(request, user)
+        return redirect(request.session["next"])
+    else:
+        raise Exception('this login is not valid in this application')
+
+    # try:
+    #     query = parse_qs(request.META['QUERY_STRING'])
+    #     userinfo = client.callback(query, request.session)
+    #     request.session["userinfo"] = userinfo
+    #     user = authenticate(**userinfo)
+    #     if user:
+    #         login(request, user)
+    #         return redirect(request.session["next"])
+    #     else:
+    #         raise Exception('this login is not valid in this application')
+    # except OIDCError as e:
+    #     return render(request, "djangooidc/error.html", {"error": e, "callback": query})
 
 
 def logout(request, next_page=None):
