@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib.auth import logout as auth_logout, authenticate, login
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.views import login as auth_login_view, logout as auth_logout_view
-from django.shortcuts import redirect, render_to_response, resolve_url
+from django.shortcuts import redirect, render, resolve_url
 from django.http import HttpResponse
 from django import forms
 from django.template import RequestContext
@@ -58,7 +58,7 @@ def openid(request, op_name=None):
                 request.session["op"] = client.provider_info["issuer"]
             except Exception as e:
                 logger.exception("could not create OOID client")
-                return render_to_response("djangooidc/error.html", {"error": e})
+                return render(request, "djangooidc/error.html", {"error": e})
     else:
         form = DynamicProvider()
 
@@ -67,13 +67,13 @@ def openid(request, op_name=None):
         try:
             return client.create_authn_request(request.session)
         except Exception as e:
-            return render_to_response("djangooidc/error.html", {"error": e})
+            return render(request, "djangooidc/error.html", {"error": e})
 
-    # Otherwise just render the list+form.
-    return render_to_response(template_name,
-                              {"op_list": [i for i in settings.OIDC_PROVIDERS.keys() if i], 'dynamic': dyn,
-                               'form': form, 'ilform': ilform, "next": request.session["next"]},
-                              context_instance=RequestContext(request))
+    return render(request,
+                  template_name,
+                  {"op_list": [i for i in settings.OIDC_PROVIDERS.keys() if i], 'dynamic': dyn,
+                   'form': form, 'ilform': ilform, "next": request.session["next"]}
+                 )
 
 
 # Step 4: analyze the token returned by the OP
@@ -92,7 +92,7 @@ def authz_cb(request):
         else:
             raise Exception('this login is not valid in this application')
     except OIDCError as e:
-        return render_to_response("djangooidc/error.html", {"error": e, "callback": query})
+        return render(request, "djangooidc/error.html", {"error": e, "callback": query})
 
 
 def logout(request, next_page=None):
@@ -117,19 +117,22 @@ def logout(request, next_page=None):
             if len(urls) > 0:
                 extra_args["post_logout_redirect_uri"] = urls[0]
             else:
-                # It is not possible to directly redirect from the OP to the page that was asked for.
-                # We will try to use the redirection point - if the redirection point URL is registered that is.
+                # It is not possible to directly redirect from the OP to the page that was asked for
+                # We will try to use the redirection point - if the redirection point URL is
+                # registered that is.
                 next_page_url = resolve_url('openid_logout_cb')
                 urls = [url for url in client.registration_response["post_logout_redirect_uris"] if
                         next_page_url in url]
                 if len(urls) > 0:
                     extra_args["post_logout_redirect_uri"] = urls[0]
                 else:
-                    # Just take the first registered URL as a desperate attempt to come back to the application
+                    # Just take the first registered URL as a desperate attempt to come back
+                    # to the application
                     extra_args["post_logout_redirect_uri"] = client.registration_response["post_logout_redirect_uris"][
                         0]
     else:
-        # No post_logout_redirect_uris registered at the OP - no redirection to the application is possible anyway
+        # No post_logout_redirect_uris registered at the OP - no redirection to the application
+        # is possible anyway
         pass
 
     # Redirect client to the OP logout page
@@ -144,13 +147,15 @@ def logout(request, next_page=None):
             resp[key] = val
         return resp
     finally:
-        # Always remove Django session stuff - even if not logged out from OP. Don't wait for the callback as it may never come.
+        # Always remove Django session stuff - even if not logged out from OP. Don't wait for the
+        # callback as it may never come.
         auth_logout(request)
         if next_page:
             request.session['next'] = next_page
 
 
 def logout_cb(request):
-    """ Simple redirection view: after logout, just redirect to a parameter value inside the session """
+    """ Simple redirection view: after logout,
+    just redirect to a parameter value inside the session """
     next = request.session["next"] if "next" in request.session.keys() else "/"
     return redirect(next)
