@@ -1,7 +1,7 @@
 # coding: utf-8
 
 import logging
-from urlparse import parse_qs
+from urllib.parse import parse_qs
 
 from django.conf import settings
 from django.contrib.auth import logout as auth_logout, authenticate, login
